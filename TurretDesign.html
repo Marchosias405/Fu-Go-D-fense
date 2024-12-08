@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Military Cannon</title>
+    <style>
+        @media (max-width: 600px) {
+            #cannon-container {
+                width: 200px;
+                height: 150px;
+            }
+
+            #speedSlider {
+                width: 150px;
+            }
+        }
+
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-image: url("Background.jpg");
+            background-size: cover; 
+            background-position: center; 
+            background-repeat: no-repeat; 
+            overflow: hidden;
+        }
+
+        #cannon-container {
+            position: absolute;
+            bottom: 20px;
+            left: 50%; 
+            width: 200px;
+            height: 150px;
+            transition: left 0.1s ease-out;
+        }
+
+        #carriage {
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1;
+        }
+
+        #turret {
+            position: absolute;
+            bottom: 50%;
+            left: 70%;
+            transform: translateX(-50%) rotate(0deg);
+            z-index: 2;
+        }
+
+        #wheel {
+            position: absolute;
+            bottom: 0;
+            left: 70%;
+            transform: translateX(-50%) rotate(0deg);
+            z-index: 3;
+        }
+
+        /* Repositioned Controls and Status */
+        #controls {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background-color: rgba(255, 255, 255, 0.8);
+            padding: 10px;
+            border-radius: 10px;
+        }
+
+        #speedSlider {
+            width: 200px;
+        } 
+
+        .cannonball {
+            position: absolute;
+            width: 25px; 
+            height: 25px; 
+            background-image: url("cannonball.png");
+            background-size: cover;
+            border-radius: 50%; 
+            z-index: 1; 
+        }
+
+        /* Styles for FuGo (falling object) */
+        #fugo {
+            position: absolute;
+            top: 0;
+            left: 50%;
+            width: 107px;
+            height: 231px;
+            background-image: url("FuGo.png");
+            background-size: cover;
+            transform: translateX(-50%);
+            z-index: 1;
+        }
+
+        /* Styles for the explosion */
+        .explosion {
+            position: absolute;
+            width: 250px;
+            height: 250px;
+            background-image: url("explosion.gif");
+            background-size: cover;
+            z-index: 2;
+            pointer-events: none;
+        }
+
+        /* Updated styles for score and lives */
+        #status {
+            position: absolute;
+            top: 80px; /* Positioned below controls */
+            left: 10px;
+            background-color: rgba(255, 255, 255, 0.8);
+            padding: 10px;
+            border-radius: 10px;
+            text-align: left;
+        }
+
+        /* Game over message */
+        #game-over {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 48px;
+            color: red;
+            font-weight: bold;
+            display: none;
+            z-index: 3;
+        }
+
+        /* Start button styles */
+        #start-button {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            padding: 20px 40px;
+            font-size: 24px;
+            cursor: pointer;
+            z-index: 4;
+        }
+    </style>
+</head>
+<body>
+    <div id="cannon-container">
+        <img src="Carriage.png" alt="Carriage" id="carriage">
+        <img src="Turret.png" alt="Turret" id="turret">
+        <img src="Wheel.png" alt="Wheel" id="wheel">
+    </div>
+
+    <!-- FuGo Image -->
+    <div id="fugo"></div>
+
+    <!-- Controls -->
+    <div id="controls">
+        <label for="speedSlider">Cannon Speed:</label>
+        <input type="range" id="speedSlider" min="0.5" max="5" step="0.1" value="1">
+    </div>
+
+    <!-- Score and Lives -->
+    <div id="status">
+         <div id="lives">Lives left: 5</div>     <!--Req9 -->
+        <div id="score">Score: 0</div>
+    </div>
+
+    <!-- Game Over Message -->
+    <div id="game-over">Game Over</div>
+
+    <!-- Start Button -->
+    <button id="start-button">Start Game</button>
+
+    <script>
+        let wheelAngle = 0;
+        let turretAngle = 0;
+        let cannonPosition = 40; 
+        let cannonSpeed = 1;
+        let canShoot = true;
+        let score = 0;
+        let lives = 5;
+        let gameOver = false;
+
+        const wheel = document.getElementById('wheel');
+        const turret = document.getElementById('turret');
+        const cannon = document.getElementById('cannon-container');
+        cannon.style.left = cannonPosition + '%'; 
+        const speedSlider = document.getElementById('speedSlider');
+        const gameArea = document.body; 
+
+        // FuGo (falling object)
+        const fugo = document.getElementById('fugo');
+
+        // Status elements
+        const scoreElement = document.getElementById('score');
+        const livesElement = document.getElementById('lives');
+        const gameOverElement = document.getElementById('game-over');
+
+        // Start button
+        const startButton = document.getElementById('start-button');
+
+        // Preload explosion sound
+        const explosionSound = new Audio("explosion.m4a");
+        const shotSound = new Audio("shot.m4a");
+
+        speedSlider.addEventListener("input", (event) => {
+            cannonSpeed = parseFloat(event.target.value);
+            speedSlider.blur(); 
+        });
+
+        // Function to start the game
+        function startGame() {
+            // Enable audio playback
+            explosionSound.play().then(() => {
+                explosionSound.pause();
+                explosionSound.currentTime = 0;
+            }).catch(() => {});
+            shotSound.play().then(() => {
+                shotSound.pause();
+                shotSound.currentTime = 0;
+            }).catch(() => {});
+
+            // Hide the start button
+            startButton.style.display = 'none';
+
+            // Start the game
+            resetFuGo();
+            updateStatus();
+        }
+
+        // Event listener for the start button
+        startButton.addEventListener('click', startGame);
+
+        // Keydown event listener
+        window.addEventListener('keydown', (event) => {
+            if (gameOver) return;
+            switch (event.key) {
+                case 'ArrowLeft':
+                    moveCannon(-1);
+                    break;
+                case 'ArrowRight':
+                    moveCannon(1);
+                    break;
+                case 'ArrowUp':
+                    adjustTurret(-1);
+                    break;
+                case 'ArrowDown':
+                    adjustTurret(1);
+                    break;
+                case ' ':
+                    shoot();
+                    break;            
+            }
+        });
+
+        const leftMarginPercentage = 5; 
+        const rightMarginPercentage = 15; 
+
+        function moveCannon(direction) {
+            const gameAreaWidth = gameArea.clientWidth;
+            const cannonWidth = cannon.offsetWidth;
+
+            // Calculate maximum left position
+            const maxLeftPercentage = 100 - rightMarginPercentage - (cannonWidth / gameAreaWidth) * 100;
+
+            // Update cannon position and wheel angle
+            cannonPosition = Math.max(leftMarginPercentage, Math.min(maxLeftPercentage, cannonPosition + direction * cannonSpeed));
+            wheelAngle += direction * 10 * cannonSpeed;
+
+            cannon.style.left = cannonPosition + '%';
+            wheel.style.transform = `translateX(-50%) rotate(${wheelAngle}deg)`;
+        }
+
+        function adjustTurret(direction) {
+            // Adjust turret angle between -20 and +35 degrees
+            turretAngle += direction * 2;
+            if (turretAngle > 35) turretAngle = 35;
+            if (turretAngle < -20) turretAngle = -20;
+            turret.style.transform = `translateX(-50%) rotate(${turretAngle}deg)`;
+        }
+
+        window.addEventListener("resize", () => {
+            const gameAreaWidth = gameArea.clientWidth;
+            const cannonWidth = cannon.offsetWidth;
+
+            const maxLeftPercentage = 100 - rightMarginPercentage - (cannonWidth / gameAreaWidth) * 100;
+
+            cannonPosition = Math.min(cannonPosition, maxLeftPercentage);
+            cannon.style.left = cannonPosition + '%';
+
+            // Handle FuGo reaching the bottom during resize
+            if (fugoIsActive()) {
+                const rect = fugo.getBoundingClientRect();
+                if (rect.bottom >= window.innerHeight) {
+                    cancelAnimationFrame(fugoAnimation);
+                    handleFuGoMissed();
+                }
+            }
+        });
+
+        function shoot() {
+            if (!canShoot || gameOver) return;
+            canShoot = false;
+
+            // Create the cannonball element
+            const cannonball = document.createElement("div");
+            cannonball.classList.add("cannonball");
+            gameArea.appendChild(cannonball);
+
+            // Play the shot sound
+            shotSound.currentTime = 0;
+            shotSound.play();
+
+            // Set initial position of the cannonball at the tip of the turret
+            const turretRect = turret.getBoundingClientRect();
+            const turretLength = 50; // Adjust this value to match the length of your turret element
+            const angleRadians = (turretAngle * Math.PI) / 180;
+
+            // Calculate the tip of the turret where the cannonball should appear
+            const tipX = turretRect.left + turretRect.width / 2 + turretLength * Math.cos(angleRadians);
+            const tipY = turretRect.top + turretRect.height / 2 + turretLength * Math.sin(angleRadians);
+
+            cannonball.style.left = `${tipX}px`;
+            cannonball.style.top = `${tipY}px`;
+
+            const velocity = 5;
+            let xVelocity = velocity * Math.cos(angleRadians);
+            let yVelocity = velocity * Math.sin(angleRadians);
+
+            function moveCannonball() {
+                const rect = cannonball.getBoundingClientRect();
+                cannonball.style.left = `${rect.left + xVelocity}px`;
+                cannonball.style.top = `${rect.top + yVelocity}px`;
+
+                // Check for collision with FuGo
+                if (checkCollision(cannonball, fugo)) {
+                    handleFuGoHit();
+                    cannonball.remove();
+                    canShoot = true;
+                    shotSound.pause();
+                    shotSound.currentTime = 0;
+                    return;
+                }
+
+                // Check if cannonball is within the game area
+                if (
+                    rect.top > 0 &&
+                    rect.left > 0 &&
+                    rect.right < window.innerWidth &&
+                    rect.bottom < window.innerHeight
+                ) {
+                    requestAnimationFrame(moveCannonball);
+                } else {
+                    cannonball.remove();
+                    canShoot = true;
+                    shotSound.pause();
+                    shotSound.currentTime = 0;
+                }
+            }
+
+            requestAnimationFrame(moveCannonball);
+        }
+
+        // Function to check collision between two elements
+        function checkCollision(elem1, elem2) {
+            if (!elem2 || !fugoIsActive()) return false;
+            const rect1 = elem1.getBoundingClientRect();
+            const rect2 = elem2.getBoundingClientRect();
+
+            return !(
+                rect1.top > rect2.bottom ||
+                rect1.bottom < rect2.top ||
+                rect1.left > rect2.right ||
+                rect1.right < rect2.left
+            );
+        }
+
+        // Function to handle FuGo being hit      --   Req4   & Req5
+        function handleFuGoHit() {
+            // Stop FuGo movement
+            cancelAnimationFrame(fugoAnimation);
+
+            // Play explosion
+            playExplosion(fugo);
+
+            // Remove FuGo after explosion
+            setTimeout(() => {
+                fugo.style.display = 'none';
+                resetFuGo();
+            }, 500);
+
+            // Update score
+            score += 1;
+            updateStatus();
+        }
+
+        // Function to play explosion at a given element's position
+        function playExplosion(targetElement) {
+            const explosion = document.createElement('div');
+            explosion.classList.add('explosion');
+            const rect = targetElement.getBoundingClientRect();
+            explosion.style.left = `${rect.left + rect.width / 2 - 50}px`;
+            explosion.style.top = `${rect.top + rect.height / 2 - 50}px`;
+            gameArea.appendChild(explosion);
+
+            // Play explosion sound
+            explosionSound.currentTime = 0; // Reset the audio to the start
+            explosionSound.play();
+
+            // Remove explosion after animation
+            setTimeout(() => {
+                explosion.remove();
+            }, 500);
+        }
+
+        // Function to update score and lives display       ---- Req5  & Req7   & Req8
+        function updateStatus() {
+            scoreElement.textContent = `Score: ${score}`;
+            livesElement.textContent = `Lives left: ${lives}`;
+
+            if (lives <= 0) {
+                livesElement.textContent = 'Lives left: 0';
+                gameOverElement.style.display = 'block';
+                gameOver = true;
+            }
+        }
+
+        // Function to reset FuGo position and start falling again       ------- Req2  & Req6  & Req11
+        function resetFuGo() {
+            if (gameOver) return;
+            fugo.style.display = 'block';
+            fugo.style.top = '0px';
+
+            // Calculate minimum and maximum positions for FuGo
+            const gameAreaWidth = window.innerWidth;
+            const cannonRect = cannon.getBoundingClientRect();
+            const fugoWidth = fugo.offsetWidth;
+
+            // Ensure FuGo is at least the length of the cannon away from the left edge
+            const minLeft = cannonRect.right + 60; // Cannon's right edge position + 60px
+            const maxLeft = gameAreaWidth - fugoWidth - 40; // 50px margin on the right
+
+            // Generate a random left position for FuGo within the specified range
+            const randomLeft = Math.random() * (maxLeft - minLeft) + minLeft;
+            fugo.style.left = `${randomLeft}px`;
+            moveFuGo();
+        }
+
+
+        let fugoAnimation;
+
+        // Function to move FuGo downwards        --------------  Req3   &  Req10
+        function moveFuGo() {
+            const speed = 2; // 2 pixels per 10 ms
+            function animate() {
+                const rect = fugo.getBoundingClientRect();
+
+                // Check if FuGo has reached the bottom
+                if (rect.bottom >= window.innerHeight) {
+                    // Stop FuGo movement
+                    cancelAnimationFrame(fugoAnimation);
+                    handleFuGoMissed();
+                    return;
+                }
+
+                fugo.style.top = `${rect.top + speed}px`;
+                fugoAnimation = requestAnimationFrame(animate);
+            }
+            fugoAnimation = requestAnimationFrame(animate);
+        }
+
+        // Function to handle FuGo reaching the bottom       -----   Req7   & Req10
+        function handleFuGoMissed() {
+            // Play explosion
+            playExplosion(fugo);
+
+            // Remove FuGo after explosion
+            setTimeout(() => {
+                fugo.style.display = 'none';
+                resetFuGo();
+            }, 500);
+
+            // Decrease lives
+            lives -= 1;
+            updateStatus();
+        }
+
+        // Function to check if FuGo is active
+        function fugoIsActive() {
+            return fugo.style.display !== 'none';
+        }
+    </script>
+</body>
+</html>
